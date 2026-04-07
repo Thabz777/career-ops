@@ -31,7 +31,6 @@ cv.md
 # Generated
 .resolved-prompt-*
 node_modules/
-package-lock.json
 
 # OpenRouter runner — generated data (personal, never commit)
 data/applied.json
