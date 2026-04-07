@@ -22,9 +22,23 @@ modes/_profile.md
 .update-dismissed
 .update-lock
 
+# Secrets (never commit)
+.env
+
+# Personal documents
+cv.md
+
 # Generated
 .resolved-prompt-*
 node_modules/
+package-lock.json
+
+# OpenRouter runner — generated data (personal, never commit)
+data/applied.json
+data/high-score-reports.json
+data/model-blacklist.json
+assets/screenshots/
+assets/resume.pdf
 
 # OS
 .DS_Store
