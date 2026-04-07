@@ -152,9 +152,20 @@ func (m ProgressModel) renderFunnel() string {
 	var lines []string
 	lines = append(lines, padStyle.Render(sectionTitle.Render("Pipeline Funnel")))
 
-	if len(m.metrics.FunnelStages) == 0 {
+	// Check for truly empty data: no stages or all stages have zero counts
+	allZero := len(m.metrics.FunnelStages) == 0
+	if !allZero {
+		allZero = true
+		for _, s := range m.metrics.FunnelStages {
+			if s.Count > 0 {
+				allZero = false
+				break
+			}
+		}
+	}
+	if allZero {
 		dimStyle := lipgloss.NewStyle().Foreground(m.theme.Subtext)
-		lines = append(lines, padStyle.Render(dimStyle.Render("No data")))
+		lines = append(lines, padStyle.Render(dimStyle.Render("No applications tracked yet")))
 		return strings.Join(lines, "\n")
 	}
 
@@ -221,9 +232,20 @@ func (m ProgressModel) renderScoreDistribution() string {
 	var lines []string
 	lines = append(lines, padStyle.Render(sectionTitle.Render("Score Distribution")))
 
-	if len(m.metrics.ScoreBuckets) == 0 {
+	// Check for truly empty data: no buckets or all buckets have zero counts
+	allZero := len(m.metrics.ScoreBuckets) == 0
+	if !allZero {
+		allZero = true
+		for _, b := range m.metrics.ScoreBuckets {
+			if b.Count > 0 {
+				allZero = false
+				break
+			}
+		}
+	}
+	if allZero {
 		dimStyle := lipgloss.NewStyle().Foreground(m.theme.Subtext)
-		lines = append(lines, padStyle.Render(dimStyle.Render("No data")))
+		lines = append(lines, padStyle.Render(dimStyle.Render("No scores recorded yet")))
 		return strings.Join(lines, "\n")
 	}
 
@@ -285,6 +307,13 @@ func (m ProgressModel) renderRates() string {
 	var lines []string
 	lines = append(lines, padStyle.Render(sectionTitle.Render("Conversion Rates")))
 
+	// No rates to show if no applications have been submitted
+	if m.metrics.ResponseRate == 0 && m.metrics.InterviewRate == 0 && m.metrics.OfferRate == 0 && m.metrics.ActiveApps == 0 {
+		dimStyle := lipgloss.NewStyle().Foreground(m.theme.Subtext)
+		lines = append(lines, padStyle.Render(dimStyle.Render("Apply to some offers to see conversion rates")))
+		return strings.Join(lines, "\n")
+	}
+
 	labelStyle := lipgloss.NewStyle().Foreground(m.theme.Text)
 	valueStyle := lipgloss.NewStyle().Bold(true)
 	sepStyle := lipgloss.NewStyle().Foreground(m.theme.Overlay)
@@ -326,7 +355,7 @@ func (m ProgressModel) renderWeeklyActivity() string {
 
 	if len(m.metrics.WeeklyActivity) == 0 {
 		dimStyle := lipgloss.NewStyle().Foreground(m.theme.Subtext)
-		lines = append(lines, padStyle.Render(dimStyle.Render("No data")))
+		lines = append(lines, padStyle.Render(dimStyle.Render("No activity recorded yet")))
 		return strings.Join(lines, "\n")
 	}
 

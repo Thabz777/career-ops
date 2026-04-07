@@ -613,6 +613,11 @@ func StatusPriority(status string) int {
 func ComputeProgressMetrics(apps []model.CareerApplication) model.ProgressMetrics {
 	pm := model.ProgressMetrics{}
 
+	// Early return for empty data -- no crash, just zero-value metrics
+	if len(apps) == 0 {
+		return pm
+	}
+
 	// Count by normalized status
 	statusCounts := make(map[string]int)
 	var totalScore float64
