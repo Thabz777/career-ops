@@ -1,0 +1,665 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Trillion — Your AI Agent</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  /* ── Design Tokens ───────────────────────────────────────────────── */
+  :root {
+    --bg:        #0E0F13;
+    --accent:    #2DD4A8;
+    --blue:      #4A6FFF;
+    --purple:    #9B5DE5;
+    --idle:      #4A4D57;
+    --glass:     rgba(14,15,19,0.15);
+    --glass-card:rgba(22,23,29,0.75);
+    --border:    rgba(255,255,255,0.06);
+    --hint:      rgba(255,255,255,0.4);
+    --blur:      blur(14px);
+    --ease:      cubic-bezier(0.16,1,0.3,1);
+  }
+  * { margin:0; padding:0; box-sizing:border-box; font-family:'Inter',sans-serif; }
+  html,body { width:100%; height:100%; overflow:hidden; background:var(--bg); color:#fff; }
+
+  /* ── Three.js Canvas ─────────────────────────────────────────────── */
+  #scene { position:fixed; inset:0; z-index:1; display:block; }
+
+  /* ── Header ─────────────────────────────────────────────────────── */
+  .header {
+    position:fixed; top:0; left:0; right:0; height:56px; z-index:10;
+    background:var(--glass); backdrop-filter:var(--blur); -webkit-backdrop-filter:var(--blur);
+    border-bottom:1px solid var(--border);
+    display:flex; align-items:center; justify-content:space-between; padding:0 20px;
+  }
+  .brand { display:flex; align-items:center; gap:8px; font-weight:600; font-size:15px; letter-spacing:.02em; }
+  .brand-dot { width:7px; height:7px; border-radius:50%; background:var(--accent); box-shadow:0 0 10px var(--accent); }
+  .header-right { display:flex; align-items:center; gap:12px; }
+  .icon-btn {
+    width:32px; height:32px; border-radius:8px; border:none; cursor:pointer;
+    background:transparent; display:grid; place-items:center;
+    color:rgba(255,255,255,.55); transition:all .2s;
+  }
+  .icon-btn:hover { background:rgba(255,255,255,.06); color:#fff; }
+  .alert-wrap { position:relative; }
+  .badge {
+    position:absolute; top:-3px; right:-3px; min-width:14px; height:14px;
+    background:var(--accent); color:var(--bg); font-size:9px; font-weight:700;
+    border-radius:7px; display:grid; place-items:center; padding:0 3px;
+  }
+  .status-dot { width:10px; height:10px; border-radius:50%; background:var(--idle); transition:background .3s,box-shadow .3s; }
+  .status-dot.listening { background:var(--accent); box-shadow:0 0 12px var(--accent); animation:statusPulse 2s ease-in-out infinite; }
+  .status-dot.processing { background:var(--purple); box-shadow:0 0 12px var(--purple); }
+  @keyframes statusPulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(1.25)} }
+
+  /* ── Activity Panel ──────────────────────────────────────────────── */
+  .panel {
+    position:fixed; top:56px; right:0; bottom:0; width:260px; z-index:9;
+    background:var(--glass); backdrop-filter:var(--blur); -webkit-backdrop-filter:var(--blur);
+    border-left:1px solid var(--border);
+    padding:16px; overflow-y:auto; overflow-x:hidden;
+    transition:width 400ms var(--ease), padding 400ms var(--ease);
+  }
+  .panel.collapsed { width:36px; padding:16px 6px; }
+  .panel.collapsed .panel-content { opacity:0; pointer-events:none; }
+  .panel-toggle {
+    width:24px; height:24px; border:none; cursor:pointer; background:transparent;
+    color:rgba(255,255,255,.5); display:grid; place-items:center; margin-bottom:14px;
+    transition:transform 300ms var(--ease), color .2s;
+  }
+  .panel-toggle.collapsed { transform:rotate(180deg); }
+  .panel-toggle:hover { color:#fff; }
+  .panel-content { transition:opacity 200ms; }
+  .panel-section { margin-bottom:22px; }
+  .section-header {
+    font-size:10px; text-transform:uppercase; letter-spacing:.12em;
+    color:rgba(255,255,255,.4); margin-bottom:8px;
+    display:flex; justify-content:space-between;
+  }
+  .section-count { color:var(--accent); font-weight:700; }
+  .entry {
+    background:rgba(255,255,255,.03); border:1px solid rgba(255,255,255,.04);
+    padding:9px 12px; border-radius:8px; margin-bottom:5px; font-size:12px;
+    color:rgba(255,255,255,.82); cursor:pointer; transition:all .2s;
+    animation:slideIn 300ms var(--ease) both;
+  }
+  .entry:hover { background:rgba(45,212,168,.08); border-color:rgba(45,212,168,.2); }
+  @keyframes slideIn { from{transform:translateX(28px);opacity:0} to{transform:none;opacity:1} }
+
+  /* ── Response Feed (left side) ───────────────────────────────────── */
+  #response-feed {
+    position:fixed; left:24px; top:72px; bottom:100px; width:300px;
+    z-index:8; display:flex; flex-direction:column; gap:12px;
+    overflow-y:auto; pointer-events:none;
+    scrollbar-width:none;
+  }
+  #response-feed::-webkit-scrollbar { display:none; }
+
+  .response-card {
+    background:var(--glass-card); backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px);
+    border:1px solid var(--border); border-radius:12px; padding:14px 16px;
+    position:relative; overflow:hidden; pointer-events:auto; flex-shrink:0;
+    animation:cardFloat 4s ease-in-out infinite;
+  }
+  .response-card::before { content:''; position:absolute; top:0; left:0; right:0; height:2px; background:var(--accent); }
+  .response-card .card-meta { font-size:10px; color:rgba(255,255,255,.35); margin-bottom:5px; letter-spacing:.04em; }
+  .response-card .card-text { font-size:13px; color:rgba(255,255,255,.9); line-height:1.55; }
+  .response-card.user-msg::before { background:var(--blue); }
+  .response-card.user-msg .card-meta { color:rgba(74,111,255,.7); }
+  @keyframes cardFloat { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-4px)} }
+
+  /* ── Input Bar ───────────────────────────────────────────────────── */
+  .input-bar {
+    position:fixed; bottom:104px; left:50%; transform:translateX(-50%);
+    z-index:15; display:flex; align-items:center; gap:8px;
+    background:var(--glass-card); backdrop-filter:var(--blur); -webkit-backdrop-filter:var(--blur);
+    border:1px solid var(--border); border-radius:28px; padding:8px 8px 8px 18px;
+    width:min(520px, calc(100vw - 48px));
+    transition:border-color .2s;
+  }
+  .input-bar:focus-within { border-color:rgba(45,212,168,.35); }
+  #textInput {
+    flex:1; background:transparent; border:none; outline:none;
+    color:#fff; font-size:14px; font-family:inherit;
+    placeholder-color:var(--hint);
+  }
+  #textInput::placeholder { color:var(--hint); }
+  .send-btn {
+    width:36px; height:36px; border-radius:50%; border:none; cursor:pointer;
+    background:var(--accent); display:grid; place-items:center; color:var(--bg);
+    transition:all .2s; flex-shrink:0;
+  }
+  .send-btn:hover { transform:scale(1.08); filter:brightness(1.1); }
+  .send-btn:disabled { opacity:.4; cursor:not-allowed; transform:none; }
+
+  /* ── Mic Bar ─────────────────────────────────────────────────────── */
+  .mic-bar {
+    position:fixed; left:0; right:0; bottom:24px; z-index:20;
+    display:flex; flex-direction:column; align-items:center; gap:10px;
+    pointer-events:none;
+  }
+  .mic-btn {
+    width:64px; height:64px; border-radius:50%;
+    background:#16171D; border:1px solid rgba(255,255,255,.08);
+    display:grid; place-items:center; cursor:pointer; position:relative;
+    pointer-events:auto;
+    transition:all 250ms var(--ease);
+  }
+  .mic-btn:hover { transform:scale(1.06); }
+  .mic-btn svg { width:22px; height:22px; color:#fff; pointer-events:none; transition:all 200ms; }
+  .mic-btn.active { border-color:var(--accent); box-shadow:0 0 24px rgba(45,212,168,.5); }
+  .mic-btn.active::before {
+    content:''; position:absolute; inset:0; border-radius:50%;
+    border:2px solid var(--accent);
+    animation:pulseRing 1.4s var(--ease) infinite;
+  }
+  @keyframes pulseRing { 0%{transform:scale(1);opacity:1} 100%{transform:scale(1.5);opacity:0} }
+  .mic-hint { font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--hint); }
+
+  /* ── Notification toast ──────────────────────────────────────────── */
+  #toast {
+    position:fixed; top:68px; left:50%; transform:translateX(-50%) translateY(-8px);
+    z-index:30; background:var(--glass-card); backdrop-filter:var(--blur);
+    border:1px solid rgba(45,212,168,.3); border-radius:10px;
+    padding:10px 18px; font-size:13px; color:#fff;
+    opacity:0; transition:opacity .3s, transform .3s;
+    pointer-events:none;
+  }
+  #toast.visible { opacity:1; transform:translateX(-50%) translateY(0); }
+
+  /* ── Processing indicator ────────────────────────────────────────── */
+  .thinking { display:inline-flex; gap:4px; align-items:center; }
+  .thinking span {
+    width:5px; height:5px; border-radius:50%; background:var(--accent);
+    animation:dot 1.2s ease-in-out infinite;
+  }
+  .thinking span:nth-child(2) { animation-delay:.2s; }
+  .thinking span:nth-child(3) { animation-delay:.4s; }
+  @keyframes dot { 0%,80%,100%{opacity:.2;transform:scale(.8)} 40%{opacity:1;transform:scale(1)} }
+</style>
+</head>
+<body>
+
+<!-- Three.js canvas (behind everything) -->
+<canvas id="scene"></canvas>
+
+<!-- Header -->
+<header class="header">
+  <div class="brand"><span class="brand-dot"></span>Trillion</div>
+  <div class="header-right">
+    <button class="icon-btn" title="Neural Map">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4M5 5l3 3M16 16l3 3M5 19l3-3M16 8l3-3"/></svg>
+    </button>
+    <button class="icon-btn alert-wrap" title="Alerts">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10 21a2 2 0 0 0 4 0"/></svg>
+      <span class="badge" id="alertBadge">0</span>
+    </button>
+    <button class="icon-btn" title="Settings">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+    </button>
+    <span class="status-dot" id="statusDot"></span>
+  </div>
+</header>
+
+<!-- Activity Panel -->
+<aside class="panel" id="panel">
+  <button class="panel-toggle" id="panelToggle">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+  </button>
+  <div class="panel-content" id="panelContent">
+    <div class="panel-section" id="inboxSection">
+      <div class="section-header"><span>Inbox Replies</span><span class="section-count" id="inboxCount">0</span></div>
+    </div>
+    <div class="panel-section" id="remindersSection">
+      <div class="section-header"><span>Reminders</span><span class="section-count" id="remCount">0</span></div>
+    </div>
+    <div class="panel-section">
+      <div class="section-header"><span>Conversation</span><span class="section-count" id="convCount">0</span></div>
+      <div class="entry" onclick="clearHistory()" style="color:rgba(255,80,80,.7)">Clear history</div>
+    </div>
+  </div>
+</aside>
+
+<!-- Response feed -->
+<div id="response-feed"></div>
+
+<!-- Text input bar -->
+<div class="input-bar">
+  <input id="textInput" type="text" placeholder="Ask Trillion anything..." autocomplete="off" />
+  <button class="send-btn" id="sendBtn" title="Send">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+  </button>
+</div>
+
+<!-- Mic bar -->
+<div class="mic-bar">
+  <button class="mic-btn" id="micBtn" aria-label="Toggle microphone">
+    <svg id="micIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <rect x="9" y="2" width="6" height="12" rx="3"/>
+      <path d="M5 10v2a7 7 0 0 0 14 0v-2"/>
+      <line x1="12" y1="19" x2="12" y2="22"/>
+    </svg>
+  </button>
+  <div class="mic-hint" id="micHint">TAP OR SAY "HEY TRILLION"</div>
+</div>
+
+<!-- Toast -->
+<div id="toast"></div>
+
+<!-- Three.js via importmap -->
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- THREE.JS COSMIC SCENE                                                   -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<script type="module">
+import * as THREE from 'three';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass }     from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+
+const canvas   = document.getElementById('scene');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+
+const scene  = new THREE.Scene();
+scene.background = new THREE.Color('#0E0F13');
+scene.fog = new THREE.FogExp2('#0E0F13', 0.035);
+
+const camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.1, 100);
+camera.position.z = 5;
+
+// Starfield
+const sg = new THREE.BufferGeometry();
+const sv = new Float32Array(2000 * 3);
+for (let i = 0; i < 2000; i++) {
+  sv[i*3]   = (Math.random()-.5)*80;
+  sv[i*3+1] = (Math.random()-.5)*80;
+  sv[i*3+2] = (Math.random()-.5)*80;
+}
+sg.setAttribute('position', new THREE.BufferAttribute(sv, 3));
+const starMat = new THREE.PointsMaterial({ color:0xffffff, size:0.03, transparent:true, opacity:.7 });
+scene.add(new THREE.Points(sg, starMat));
+
+// Nebula
+const nebulaMat = new THREE.ShaderMaterial({
+  transparent:true, depthWrite:false, blending:THREE.AdditiveBlending,
+  uniforms:{ uTime:{value:0} },
+  vertexShader:`varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}`,
+  fragmentShader:`
+    varying vec2 vUv;uniform float uTime;
+    float h(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
+    float n(vec2 p){vec2 i=floor(p),f=fract(p);float a=h(i),b=h(i+vec2(1,0)),c=h(i+vec2(0,1)),d=h(i+vec2(1,1));vec2 u=f*f*(3.-2.*f);return mix(a,b,u.x)+(c-a)*u.y*(1.-u.x)+(d-b)*u.x*u.y;}
+    void main(){
+      vec2 uv=vUv*3.;float nm=n(uv+uTime*.03)+.5*n(uv*2.-uTime*.02);
+      vec3 t=vec3(.18,.83,.66),p=vec3(.55,.30,.85),bl=vec3(.20,.40,.90);
+      vec3 col=mix(t,p,nm);col=mix(col,bl,n(uv*.5));
+      gl_FragColor=vec4(col,smoothstep(.3,.7,nm)*.22);
+    }`
+});
+const nebula = new THREE.Mesh(new THREE.PlaneGeometry(40,40), nebulaMat);
+nebula.position.z = -10;
+scene.add(nebula);
+
+// Orb
+const shared = { uTime:{value:0}, uVoiceBright:{value:0} };
+window._orbShared = shared;
+
+function glowLayer(size, intensity, opacity) {
+  return new THREE.Mesh(
+    new THREE.SphereGeometry(size,64,64),
+    new THREE.ShaderMaterial({
+      transparent:true,depthWrite:false,blending:THREE.AdditiveBlending,
+      uniforms:{
+        uTime:shared.uTime, uVoiceBright:shared.uVoiceBright,
+        uI:{value:intensity}, uO:{value:opacity}
+      },
+      vertexShader:`varying vec3 vN;void main(){vN=normalize(normalMatrix*normal);gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}`,
+      fragmentShader:`
+        uniform float uTime,uVoiceBright,uI,uO;varying vec3 vN;
+        void main(){
+          float f=pow(1.-dot(vN,vec3(0,0,1)),2.);
+          float pulse=.5+.5*sin(uTime*1.57);
+          float v=uVoiceBright*1.4;
+          vec3 teal=vec3(.18,.83,.66);
+          float a=uO*(uI+pulse*.15+v)*f;
+          gl_FragColor=vec4(teal*(1.+v),clamp(a,0.,1.));
+        }`
+    })
+  );
+}
+const orbGroup = new THREE.Group();
+orbGroup.add(glowLayer(1.65,.35,.30));
+orbGroup.add(glowLayer(1.10,.70,.55));
+orbGroup.add(glowLayer(0.68,1.20,.95));
+scene.add(orbGroup);
+
+// Post-processing
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+composer.addPass(new UnrealBloomPass(new THREE.Vector2(innerWidth,innerHeight),1.5,.6,.1));
+
+window.addEventListener('resize', () => {
+  camera.aspect = innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth,innerHeight);
+  composer.setSize(innerWidth,innerHeight);
+});
+
+const clock = new THREE.Clock();
+let lastAmp = 0;
+function animate() {
+  const t = clock.getElapsedTime();
+  shared.uTime.value = t;
+  nebulaMat.uniforms.uTime.value = t;
+  if (lastAmp < 0.05) shared.uVoiceBright.value = (.5+.5*Math.sin(t*Math.PI/2))*.15;
+  orbGroup.rotation.y = t * .04;
+  composer.render();
+  requestAnimationFrame(animate);
+}
+animate();
+
+window.addEventListener('trillion:voice-amplitude', e => {
+  lastAmp = e.detail.amplitude;
+  shared.uVoiceBright.value = e.detail.amplitude;
+});
+</script>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- APP LOGIC                                                                -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<script>
+// ── State ─────────────────────────────────────────────────────────────────
+const history = [];  // { role, content }
+let listening  = false;
+let processing = false;
+let alertCount = 0;
+let remCount   = 0;
+
+// ── DOM refs ──────────────────────────────────────────────────────────────
+const statusDot   = document.getElementById('statusDot');
+const micBtn      = document.getElementById('micBtn');
+const micIcon     = document.getElementById('micIcon');
+const micHint     = document.getElementById('micHint');
+const sendBtn     = document.getElementById('sendBtn');
+const textInput   = document.getElementById('textInput');
+const feed        = document.getElementById('response-feed');
+const toastEl     = document.getElementById('toast');
+const alertBadge  = document.getElementById('alertBadge');
+const remCountEl  = document.getElementById('remCount');
+const convCountEl = document.getElementById('convCount');
+const panel       = document.getElementById('panel');
+const panelToggle = document.getElementById('panelToggle');
+
+const MIC_SVG  = `<rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10v2a7 7 0 0 0 14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/>`;
+const STOP_SVG = `<rect x="6" y="6" width="12" height="12" rx="2.5" fill="white" stroke="none"/>`;
+
+// ── WebSocket ─────────────────────────────────────────────────────────────
+const WS_URL = `ws://${location.host}/ws`;
+let ws;
+
+function connectWS() {
+  ws = new WebSocket(WS_URL);
+  ws.onopen = () => console.log('[WS] connected');
+  ws.onmessage = ({ data }) => {
+    let msg;
+    try { msg = JSON.parse(data); } catch { return; }
+    if (msg.type === 'reminder_fire') {
+      showToast(`⏰ ${msg.text}`);
+      remCount++;
+      remCountEl.textContent = remCount;
+      alertCount++;
+      alertBadge.textContent = alertCount;
+      addReminderEntry(msg.text);
+    }
+  };
+  ws.onclose = () => setTimeout(connectWS, 3000);
+  ws.onerror = () => ws.close();
+}
+connectWS();
+
+// Heartbeat
+setInterval(() => {
+  if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'ping' }));
+}, 10000);
+
+// Throttled amplitude broadcast
+let lastAmpSend = 0;
+window.addEventListener('trillion:voice-amplitude', e => {
+  const now = performance.now();
+  if (now - lastAmpSend > 50 && ws?.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ type: 'amplitude', value: e.detail.amplitude }));
+    lastAmpSend = now;
+  }
+});
+
+// ── Panel toggle ──────────────────────────────────────────────────────────
+let panelCollapsed = false;
+panelToggle.addEventListener('click', () => {
+  panelCollapsed = !panelCollapsed;
+  panel.classList.toggle('collapsed', panelCollapsed);
+  panelToggle.classList.toggle('collapsed', panelCollapsed);
+});
+
+// ── Status dot ────────────────────────────────────────────────────────────
+function setStatus(state) {
+  statusDot.className = 'status-dot';
+  if (state !== 'idle') statusDot.classList.add(state);
+}
+
+// ── Toast ─────────────────────────────────────────────────────────────────
+let toastTimer;
+function showToast(msg) {
+  toastEl.textContent = msg;
+  toastEl.classList.add('visible');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toastEl.classList.remove('visible'), 4000);
+}
+
+// ── Feed cards ────────────────────────────────────────────────────────────
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function addCard(text, role = 'assistant', isThinking = false) {
+  const card = document.createElement('div');
+  card.className = 'response-card' + (role === 'user' ? ' user-msg' : '');
+  card.innerHTML = `
+    <div class="card-meta">${role === 'user' ? 'You' : 'Trillion'} · ${new Date().toLocaleTimeString()}</div>
+    <div class="card-text">${isThinking ? '<span class="thinking"><span></span><span></span><span></span></span>' : escHtml(text)}</div>
+  `;
+  feed.prepend(card);
+  card.animate([
+    { opacity:0, transform:'translateY(16px)' },
+    { opacity:1, transform:'translateY(0)' }
+  ], { duration:380, fill:'forwards', easing:'cubic-bezier(0.16,1,0.3,1)' });
+  return card;
+}
+
+function addReminderEntry(text) {
+  const sec = document.getElementById('remindersSection');
+  const entry = document.createElement('div');
+  entry.className = 'entry';
+  entry.textContent = text;
+  sec.appendChild(entry);
+}
+
+function clearHistory() {
+  history.length = 0;
+  convCountEl.textContent = '0';
+  feed.innerHTML = '';
+  showToast('Conversation cleared');
+}
+
+// ── Chat ──────────────────────────────────────────────────────────────────
+async function chat(userText) {
+  if (!userText.trim() || processing) return;
+  processing = true;
+  setStatus('processing');
+  sendBtn.disabled = true;
+
+  addCard(userText, 'user');
+  const thinkCard = addCard('', 'assistant', true);
+  history.push({ role:'user', content:userText });
+  convCountEl.textContent = Math.ceil(history.length / 2);
+
+  try {
+    const res = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: userText, history: history.slice(-20) }),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const { text } = await res.json();
+
+    thinkCard.querySelector('.card-text').textContent = text;
+    history.push({ role:'assistant', content:text });
+    convCountEl.textContent = Math.ceil(history.length / 2);
+
+    // TTS
+    playTTS(text);
+  } catch (err) {
+    thinkCard.querySelector('.card-text').textContent = `Error: ${err.message}`;
+  } finally {
+    processing = false;
+    sendBtn.disabled = false;
+    if (!listening) setStatus('idle');
+  }
+}
+
+async function playTTS(text) {
+  try {
+    const res = await fetch('/api/tts', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ text }),
+    });
+    if (!res.ok) return;
+    const buf = await res.arrayBuffer();
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const decoded = await ctx.decodeAudioData(buf);
+    const src = ctx.createBufferSource();
+    src.buffer = decoded;
+    src.connect(ctx.destination);
+    src.start();
+  } catch { /* TTS optional */ }
+}
+
+// ── Text input ────────────────────────────────────────────────────────────
+textInput.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    const val = textInput.value.trim();
+    textInput.value = '';
+    chat(val);
+  }
+});
+sendBtn.addEventListener('click', () => {
+  const val = textInput.value.trim();
+  textInput.value = '';
+  chat(val);
+});
+
+// ── Mic / Voice ───────────────────────────────────────────────────────────
+let audioCtx, analyser, micStream, rafId, mediaRecorder;
+let audioChunks = [];
+
+micBtn.addEventListener('click', async () => {
+  if (listening) {
+    stopListening();
+  } else {
+    await startListening();
+  }
+});
+
+async function startListening() {
+  try {
+    micStream  = await navigator.mediaDevices.getUserMedia({ audio: true });
+    audioCtx   = new (window.AudioContext || window.webkitAudioContext)();
+    const src  = audioCtx.createMediaStreamSource(micStream);
+    analyser   = audioCtx.createAnalyser();
+    analyser.fftSize = 256;
+    src.connect(analyser);
+
+    const data = new Uint8Array(analyser.frequencyBinCount);
+    const tickAmp = () => {
+      analyser.getByteFrequencyData(data);
+      let sum = 0;
+      for (let i = 0; i < data.length; i++) sum += data[i];
+      const amp = Math.min(1, (sum / data.length) / 80);
+      window.dispatchEvent(new CustomEvent('trillion:voice-amplitude', { detail: { amplitude: amp } }));
+      rafId = requestAnimationFrame(tickAmp);
+    };
+    rafId = requestAnimationFrame(tickAmp);
+
+    // Recording
+    audioChunks = [];
+    mediaRecorder = new MediaRecorder(micStream, { mimeType: 'audio/webm' });
+    mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+    mediaRecorder.onstop = transcribeAndChat;
+    mediaRecorder.start();
+
+    listening = true;
+    micBtn.classList.add('active');
+    micIcon.innerHTML = STOP_SVG;
+    micHint.textContent = 'LISTENING...';
+    setStatus('listening');
+    window.dispatchEvent(new CustomEvent('trillion:mic-toggle', { detail: { listening:true } }));
+  } catch (e) {
+    showToast('Microphone access denied');
+  }
+}
+
+function stopListening() {
+  listening = false;
+  micBtn.classList.remove('active');
+  micIcon.innerHTML = MIC_SVG;
+  micHint.textContent = 'TAP OR SAY "HEY TRILLION"';
+  setStatus('processing');
+  window.dispatchEvent(new CustomEvent('trillion:mic-toggle', { detail: { listening:false } }));
+
+  mediaRecorder?.stop();
+  micStream?.getTracks().forEach(t => t.stop());
+  audioCtx?.close();
+  cancelAnimationFrame(rafId);
+  window.dispatchEvent(new CustomEvent('trillion:voice-amplitude', { detail:{ amplitude:0 } }));
+}
+
+async function transcribeAndChat() {
+  if (!audioChunks.length) return;
+  const blob = new Blob(audioChunks, { type:'audio/webm' });
+  audioChunks = [];
+
+  const thinking = addCard('', 'user', true);
+  try {
+    const form = new FormData();
+    form.append('audio', blob, 'recording.webm');
+    const txRes = await fetch('/api/transcribe', { method:'POST', body:form });
+    const { text } = await txRes.json();
+    thinking.querySelector('.card-text').textContent = text;
+    thinking.classList.add('user-msg');
+    thinking.querySelector('.card-meta').textContent = `You · ${new Date().toLocaleTimeString()}`;
+    if (text?.trim()) await chat(text);
+    else setStatus('idle');
+  } catch (err) {
+    thinking.querySelector('.card-text').textContent = `Transcription failed: ${err.message}`;
+    setStatus('idle');
+  }
+}
+
+// Welcome card
+setTimeout(() => {
+  addCard("Hi! I'm Trillion. Ask me anything — or tap the mic to speak.", 'assistant');
+}, 600);
+</script>
+</body>
+</html>

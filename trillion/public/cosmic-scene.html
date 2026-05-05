@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Trillion — Cosmic Scene</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #0E0F13; }
+  #scene { position: fixed; inset: 0; z-index: 1; display: block; }
+  #dev-panel {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+    z-index: 10; background: rgba(14,15,19,0.8); border: 1px solid rgba(255,255,255,0.08);
+    padding: 12px 20px; border-radius: 12px; display: flex; align-items: center; gap: 16px;
+    font-family: Inter, sans-serif; color: rgba(255,255,255,0.7); font-size: 12px;
+  }
+  #dev-panel input[type=range] { accent-color: #2DD4A8; width: 140px; }
+  #amp-val { color: #2DD4A8; font-weight: 600; min-width: 36px; }
+</style>
+</head>
+<body>
+<canvas id="scene"></canvas>
+<div id="dev-panel">
+  <span>Amplitude</span>
+  <input type="range" id="ampSlider" min="0" max="100" value="0" step="1" />
+  <span id="amp-val">0.00</span>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+
+const canvas = document.getElementById('scene');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color('#0E0F13');
+scene.fog = new THREE.FogExp2('#0E0F13', 0.04);
+
+const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 100);
+camera.position.z = 5;
+
+// ── Starfield ────────────────────────────────────────────────────────────
+const starGeo = new THREE.BufferGeometry();
+const starCount = 2000;
+const sPos = new Float32Array(starCount * 3);
+for (let i = 0; i < starCount; i++) {
+  sPos[i * 3]     = (Math.random() - 0.5) * 80;
+  sPos[i * 3 + 1] = (Math.random() - 0.5) * 80;
+  sPos[i * 3 + 2] = (Math.random() - 0.5) * 80;
+}
+starGeo.setAttribute('position', new THREE.BufferAttribute(sPos, 3));
+const starMat = new THREE.PointsMaterial({ color: 0xffffff, size: 0.035, transparent: true, opacity: 0.75 });
+scene.add(new THREE.Points(starGeo, starMat));
+
+// ── Nebula ───────────────────────────────────────────────────────────────
+const nebulaMat = new THREE.ShaderMaterial({
+  transparent: true,
+  depthWrite: false,
+  blending: THREE.AdditiveBlending,
+  uniforms: { uTime: { value: 0 } },
+  vertexShader: `varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }`,
+  fragmentShader: `
+    varying vec2 vUv; uniform float uTime;
+    float hash(vec2 p){ return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }
+    float noise(vec2 p){
+      vec2 i=floor(p),f=fract(p);
+      float a=hash(i),b=hash(i+vec2(1,0)),c=hash(i+vec2(0,1)),d=hash(i+vec2(1,1));
+      vec2 u=f*f*(3.0-2.0*f);
+      return mix(a,b,u.x)+(c-a)*u.y*(1.0-u.x)+(d-b)*u.x*u.y;
+    }
+    void main(){
+      vec2 uv=vUv*3.0;
+      float n=noise(uv+uTime*0.03)+0.5*noise(uv*2.0-uTime*0.02);
+      vec3 teal=vec3(0.18,0.83,0.66),purple=vec3(0.55,0.30,0.85),blue=vec3(0.20,0.40,0.90);
+      vec3 col=mix(teal,purple,n); col=mix(col,blue,noise(uv*0.5));
+      float alpha=smoothstep(0.3,0.7,n)*0.22;
+      gl_FragColor=vec4(col,alpha);
+    }`
+});
+const nebula = new THREE.Mesh(new THREE.PlaneGeometry(40, 40), nebulaMat);
+nebula.position.z = -10;
+scene.add(nebula);
+
+// ── Orb (3 glow layers) ───────────────────────────────────────────────────
+const shared = { uTime: { value: 0 }, uVoiceBright: { value: 0.0 } };
+window._orbUniforms = shared;
+
+function makeGlowLayer(size, intensity, baseOpacity) {
+  return new THREE.Mesh(
+    new THREE.SphereGeometry(size, 64, 64),
+    new THREE.ShaderMaterial({
+      transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+      uniforms: {
+        uTime:       shared.uTime,
+        uVoiceBright: shared.uVoiceBright,
+        uIntensity:  { value: intensity },
+        uOpacity:    { value: baseOpacity },
+      },
+      vertexShader: `varying vec3 vNormal;
+        void main(){ vNormal=normalize(normalMatrix*normal);
+          gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }`,
+      fragmentShader: `
+        uniform float uTime,uVoiceBright,uIntensity,uOpacity;
+        varying vec3 vNormal;
+        void main(){
+          float fres=pow(1.0-dot(vNormal,vec3(0,0,1)),2.0);
+          float pulse=0.5+0.5*sin(uTime*1.57);
+          float v=uVoiceBright*1.4;
+          vec3 teal=vec3(0.18,0.83,0.66);
+          float a=uOpacity*(uIntensity+pulse*0.15+v)*fres;
+          gl_FragColor=vec4(teal*(1.0+v),clamp(a,0.0,1.0));
+        }`
+    })
+  );
+}
+
+const orbGroup = new THREE.Group();
+orbGroup.add(makeGlowLayer(1.65, 0.35, 0.30)); // atmospheric bloom
+orbGroup.add(makeGlowLayer(1.10, 0.70, 0.55)); // halo
+orbGroup.add(makeGlowLayer(0.68, 1.20, 0.95)); // bright core
+scene.add(orbGroup);
+
+// ── Post-processing ───────────────────────────────────────────────────────
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+composer.addPass(new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 1.5, 0.6, 0.1));
+
+// ── Resize ────────────────────────────────────────────────────────────────
+window.addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+  composer.setSize(innerWidth, innerHeight);
+});
+
+// ── Animate ───────────────────────────────────────────────────────────────
+const clock = new THREE.Clock();
+let lastAmplitude = 0;
+
+function animate() {
+  const t = clock.getElapsedTime();
+  shared.uTime.value = t;
+  nebulaMat.uniforms.uTime.value = t;
+
+  // Idle breathing if no voice
+  if (lastAmplitude < 0.05) {
+    shared.uVoiceBright.value = (0.5 + 0.5 * Math.sin(t * (Math.PI * 2 / 4))) * 0.15;
+  }
+
+  orbGroup.rotation.y = t * 0.04;
+  starMat.opacity = 0.55 + 0.2 * Math.sin(t * 0.3);
+
+  composer.render();
+  requestAnimationFrame(animate);
+}
+animate();
+
+// ── Amplitude events (from mic-bar or dev slider) ─────────────────────────
+window.addEventListener('trillion:voice-amplitude', e => {
+  lastAmplitude = e.detail.amplitude;
+  shared.uVoiceBright.value = e.detail.amplitude;
+});
+
+// ── Dev slider ────────────────────────────────────────────────────────────
+const slider = document.getElementById('ampSlider');
+const ampVal = document.getElementById('amp-val');
+slider.addEventListener('input', () => {
+  const v = slider.value / 100;
+  ampVal.textContent = v.toFixed(2);
+  window.dispatchEvent(new CustomEvent('trillion:voice-amplitude', { detail: { amplitude: v } }));
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Trillion — Mic Bar</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', sans-serif; }
+  body { background: #0E0F13; min-height: 100vh; display: grid; place-items: center; }
+
+  .mic-bar {
+    display: flex; flex-direction: column; align-items: center; gap: 14px;
+  }
+
+  .mic-btn {
+    width: 64px; height: 64px; border-radius: 50%;
+    background: #16171D; border: 1px solid rgba(255,255,255,0.08);
+    display: grid; place-items: center; cursor: pointer; position: relative;
+    transition: all 250ms cubic-bezier(0.16,1,0.3,1);
+    outline: none;
+  }
+  .mic-btn:hover { transform: scale(1.06); filter: brightness(1.15); }
+  .mic-btn svg { width: 22px; height: 22px; color: #fff; transition: all 200ms ease; pointer-events: none; }
+
+  .mic-btn.active {
+    border-color: #2DD4A8;
+    box-shadow: 0 0 24px rgba(45,212,168,0.5);
+  }
+  .mic-btn.active::before {
+    content: '';
+    position: absolute; inset: 0; border-radius: 50%;
+    border: 2px solid #2DD4A8;
+    animation: pulseRing 1.4s cubic-bezier(0.16,1,0.3,1) infinite;
+  }
+  @keyframes pulseRing {
+    0%   { transform: scale(1); opacity: 1; }
+    100% { transform: scale(1.5); opacity: 0; }
+  }
+
+  .hint {
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em;
+    color: rgba(255,255,255,0.4); user-select: none;
+  }
+
+  /* Amplitude ring driven by JS */
+  .amp-ring {
+    position: absolute; inset: -8px; border-radius: 50%;
+    border: 2px solid rgba(45,212,168,0);
+    transition: border-color 80ms, transform 80ms;
+    pointer-events: none;
+  }
+</style>
+</head>
+<body>
+<div class="mic-bar">
+  <button class="mic-btn" id="micBtn" aria-label="Toggle microphone">
+    <div class="amp-ring" id="ampRing"></div>
+    <svg id="micIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <rect x="9" y="2" width="6" height="12" rx="3"/>
+      <path d="M5 10v2a7 7 0 0 0 14 0v-2"/>
+      <line x1="12" y1="19" x2="12" y2="22"/>
+    </svg>
+  </button>
+  <div class="hint" id="hint">TAP OR SAY "HEY TRILLION"</div>
+</div>
+
+<script>
+  const btn    = document.getElementById('micBtn');
+  const icon   = document.getElementById('micIcon');
+  const hint   = document.getElementById('hint');
+  const ring   = document.getElementById('ampRing');
+
+  const MIC_SVG  = `<rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10v2a7 7 0 0 0 14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/>`;
+  const STOP_SVG = `<rect x="6" y="6" width="12" height="12" rx="2.5" fill="white" stroke="none"/>`;
+
+  let listening = false;
+  let audioCtx, analyser, micStream, rafId;
+
+  btn.addEventListener('click', async () => {
+    listening = !listening;
+    btn.classList.toggle('active', listening);
+    icon.innerHTML = listening ? STOP_SVG : MIC_SVG;
+    hint.textContent = listening ? 'LISTENING...' : 'TAP OR SAY "HEY TRILLION"';
+
+    window.dispatchEvent(new CustomEvent('trillion:mic-toggle', { detail: { listening } }));
+
+    if (listening) await startCapture();
+    else stopCapture();
+  });
+
+  async function startCapture() {
+    try {
+      micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      audioCtx  = new (window.AudioContext || window.webkitAudioContext)();
+      const src = audioCtx.createMediaStreamSource(micStream);
+      analyser  = audioCtx.createAnalyser();
+      analyser.fftSize = 256;
+      src.connect(analyser);
+
+      const data = new Uint8Array(analyser.frequencyBinCount);
+      let lastSend = 0;
+
+      const tick = (now) => {
+        analyser.getByteFrequencyData(data);
+        let sum = 0;
+        for (let i = 0; i < data.length; i++) sum += data[i];
+        const amp = Math.min(1, (sum / data.length) / 80);
+
+        // Drive amplitude ring visually
+        const scale = 1 + amp * 0.6;
+        const alpha = amp * 0.9;
+        ring.style.transform = `scale(${scale})`;
+        ring.style.borderColor = `rgba(45,212,168,${alpha})`;
+
+        // Broadcast at max 20fps
+        if (now - lastSend > 50) {
+          window.dispatchEvent(new CustomEvent('trillion:voice-amplitude', { detail: { amplitude: amp } }));
+          lastSend = now;
+        }
+        rafId = requestAnimationFrame(tick);
+      };
+      rafId = requestAnimationFrame(tick);
+    } catch (e) {
+      console.error('Mic access denied:', e);
+      listening = false;
+      btn.classList.remove('active');
+      icon.innerHTML = MIC_SVG;
+      hint.textContent = 'MIC ACCESS DENIED';
+    }
+  }
+
+  function stopCapture() {
+    micStream?.getTracks().forEach(t => t.stop());
+    audioCtx?.close();
+    cancelAnimationFrame(rafId);
+    ring.style.transform = 'scale(1)';
+    ring.style.borderColor = 'rgba(45,212,168,0)';
+    window.dispatchEvent(new CustomEvent('trillion:voice-amplitude', { detail: { amplitude: 0 } }));
+  }
+</script>
+</body>
+</html>

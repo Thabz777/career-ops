@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Trillion — Glass Shell</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-base: #0E0F13;
+    --accent: #2DD4A8;
+    --processing-blue: #4A6FFF;
+    --processing-purple: #9B5DE5;
+    --idle-gray: #4A4D57;
+    --glass-surface: rgba(14,15,19,0.15);
+    --glass-card: rgba(22,23,29,0.75);
+    --glass-border: rgba(255,255,255,0.06);
+    --hint: rgba(255,255,255,0.4);
+    --blur: blur(14px);
+    --ease: cubic-bezier(0.16,1,0.3,1);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', sans-serif; }
+  body { background: var(--bg-base); color: #fff; height: 100vh; overflow: hidden; }
+
+  /* ── Header ─────────────────────────────────────────────────────── */
+  .header {
+    position: fixed; top: 0; left: 0; right: 0; height: 56px; z-index: 10;
+    background: var(--glass-surface); backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur);
+    border-bottom: 1px solid var(--glass-border);
+    display: flex; align-items: center; justify-content: space-between; padding: 0 20px;
+  }
+  .brand { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 15px; letter-spacing: 0.02em; }
+  .brand-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 10px var(--accent); }
+  .header-right { display: flex; align-items: center; gap: 12px; }
+  .icon-btn {
+    width: 32px; height: 32px; border-radius: 8px; border: none; cursor: pointer;
+    background: transparent; display: grid; place-items: center;
+    color: rgba(255,255,255,0.55); transition: all .2s;
+  }
+  .icon-btn:hover { background: rgba(255,255,255,0.06); color: #fff; }
+  .alert-wrap { position: relative; }
+  .badge {
+    position: absolute; top: -3px; right: -3px; min-width: 14px; height: 14px;
+    background: var(--accent); color: var(--bg-base); font-size: 9px; font-weight: 700;
+    border-radius: 7px; display: grid; place-items: center; padding: 0 3px;
+  }
+  .status-dot {
+    width: 10px; height: 10px; border-radius: 50%; background: var(--idle-gray);
+    transition: background .3s, box-shadow .3s;
+  }
+  .status-dot.listening {
+    background: var(--accent); box-shadow: 0 0 12px var(--accent);
+    animation: statusPulse 2s ease-in-out infinite;
+  }
+  .status-dot.processing {
+    background: var(--processing-purple); box-shadow: 0 0 12px var(--processing-purple);
+  }
+  @keyframes statusPulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(1.25)} }
+
+  /* ── Activity Panel ──────────────────────────────────────────────── */
+  .panel {
+    position: fixed; top: 56px; right: 0; bottom: 0; width: 260px; z-index: 9;
+    background: var(--glass-surface); backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur);
+    border-left: 1px solid var(--glass-border);
+    padding: 20px 16px 20px 16px; overflow-y: auto;
+    transition: width 400ms var(--ease), padding 400ms var(--ease);
+  }
+  .panel.collapsed { width: 36px; padding: 20px 6px; overflow: hidden; }
+  .panel.collapsed .panel-content { opacity: 0; pointer-events: none; transform: translateX(12px); }
+  .panel-toggle {
+    position: sticky; top: 0; width: 24px; height: 24px; border: none; cursor: pointer;
+    background: transparent; color: rgba(255,255,255,0.5); display: grid; place-items: center;
+    margin-bottom: 12px; transition: color .2s;
+  }
+  .panel-toggle:hover { color: #fff; }
+  .panel-content { transition: opacity 200ms, transform 200ms; }
+  .panel-section { margin-bottom: 24px; }
+  .section-header {
+    font-size: 10px; text-transform: uppercase; letter-spacing: 0.12em;
+    color: rgba(255,255,255,0.45); margin-bottom: 10px;
+    display: flex; justify-content: space-between;
+  }
+  .section-count { color: var(--accent); font-weight: 700; }
+  .entry {
+    background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.04);
+    padding: 10px 12px; border-radius: 8px; margin-bottom: 6px; font-size: 12px;
+    color: rgba(255,255,255,0.82); cursor: pointer; transition: all .2s;
+    animation: slideIn 300ms var(--ease) both;
+  }
+  .entry:hover { background: rgba(45,212,168,0.08); border-color: rgba(45,212,168,0.22); }
+  @keyframes slideIn { from{transform:translateX(32px);opacity:0} to{transform:none;opacity:1} }
+
+  /* ── Response Cards ──────────────────────────────────────────────── */
+  .card-area {
+    position: fixed; left: 40px; top: 50%; transform: translateY(-50%);
+    z-index: 8; pointer-events: none; display: flex; flex-direction: column; gap: 16px;
+  }
+  .card {
+    width: 240px; background: var(--glass-card);
+    backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+    border: 1px solid var(--glass-border); border-radius: 12px; padding: 14px 16px;
+    position: relative; overflow: hidden; pointer-events: auto;
+    animation: cardEntry 500ms var(--ease) both, floatCard 4s ease-in-out infinite;
+  }
+  .card.revenue { width: 300px; }
+  .card::before { content:''; position:absolute; top:0; left:0; right:0; height:2px; background:var(--accent); }
+  .card-title { font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; color: rgba(255,255,255,0.45); margin-bottom: 6px; }
+  .card-body { font-size: 13px; color: rgba(255,255,255,0.9); line-height: 1.5; }
+  @keyframes cardEntry { from{opacity:0;transform:rotateX(8deg) translateY(20px)} to{opacity:1;transform:none} }
+  @keyframes floatCard { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-6px)} }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<header class="header">
+  <div class="brand"><span class="brand-dot"></span>Trillion</div>
+  <div class="header-right">
+    <button class="icon-btn" title="Neural Map">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4M5 5l3 3M16 16l3 3M5 19l3-3M16 8l3-3"/></svg>
+    </button>
+    <button class="icon-btn alert-wrap" title="Alerts">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10 21a2 2 0 0 0 4 0"/></svg>
+      <span class="badge">3</span>
+    </button>
+    <button class="icon-btn" title="Settings">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+    </button>
+    <span class="status-dot listening" id="statusDot"></span>
+  </div>
+</header>
+
+<!-- Activity Panel -->
+<aside class="panel" id="panel">
+  <button class="panel-toggle" id="panelToggle" title="Toggle panel">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+  </button>
+  <div class="panel-content">
+    <div class="panel-section">
+      <div class="section-header"><span>Inbox Replies</span><span class="section-count">4</span></div>
+      <div class="entry">Reply to Sarah about Q4 plan</div>
+      <div class="entry">Confirm meeting with vendor</div>
+      <div class="entry">Thanks email to investor</div>
+      <div class="entry">Decline conference invite</div>
+    </div>
+    <div class="panel-section">
+      <div class="section-header"><span>Scout Tasks</span><span class="section-count">2</span></div>
+      <div class="entry">Research competitor pricing</div>
+      <div class="entry">Find AI conference in Dubai</div>
+    </div>
+    <div class="panel-section">
+      <div class="section-header"><span>Flux Tasks</span><span class="section-count">3</span></div>
+      <div class="entry">Generate weekly report</div>
+      <div class="entry">Update CRM contacts</div>
+      <div class="entry">Schedule social posts</div>
+    </div>
+    <div class="panel-section">
+      <div class="section-header"><span>Relay Drafts</span><span class="section-count">2</span></div>
+      <div class="entry">Newsletter draft v3</div>
+      <div class="entry">LinkedIn post about launch</div>
+    </div>
+  </div>
+</aside>
+
+<!-- Response Cards -->
+<div class="card-area">
+  <div class="card">
+    <div class="card-title">Inbox Summary</div>
+    <div class="card-body">12 unread emails. 3 need replies today.</div>
+  </div>
+  <div class="card revenue">
+    <div class="card-title">Revenue · Today</div>
+    <div class="card-body">$4,820 from 14 orders. Up 18% vs yesterday.</div>
+  </div>
+</div>
+
+<script>
+  const panel = document.getElementById('panel');
+  const toggle = document.getElementById('panelToggle');
+  const dot = document.getElementById('statusDot');
+  let collapsed = false;
+
+  toggle.addEventListener('click', () => {
+    collapsed = !collapsed;
+    panel.classList.toggle('collapsed', collapsed);
+    toggle.style.transform = collapsed ? 'rotate(180deg)' : '';
+  });
+
+  window.addEventListener('trillion:mic-toggle', e => {
+    dot.className = 'status-dot';
+    if (e.detail.listening) {
+      dot.classList.add('listening');
+    } else {
+      dot.classList.add('processing');
+      setTimeout(() => dot.classList.remove('processing'), 1800);
+    }
+  });
+</script>
+</body>
+</html>
