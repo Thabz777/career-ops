@@ -1,6 +1,6 @@
 # Trillion
 
-Voice-first AI personal assistant with a holographic UI. Groq LLM + LangGraph agent + Three.js cosmic scene.
+Voice-first AI personal assistant with a holographic UI. **100% free-tier — no paid subscriptions required.**
 
 ## Quick Start
 
@@ -8,30 +8,29 @@ Voice-first AI personal assistant with a holographic UI. Groq LLM + LangGraph ag
 cd trillion
 npm install
 cp .env.example .env
-# Add your GROQ_API_KEY to .env
+# Add your free GROQ_API_KEY (sign up at https://console.groq.com)
 npm start
 # Open http://localhost:3000
 ```
+
+## Free Tier Stack
+
+| Service | What it does | Cost | Key needed? |
+|---------|-------------|------|-------------|
+| **Groq** | LLM (`llama-3.3-70b-versatile`) + STT (`whisper-large-v3`) | Free tier | Yes — free account |
+| **Brave Search** | Web search tool | Free tier (2k/mo) | Optional — stubs without it |
+| **Web Speech API** | Text-to-speech | Free, built into every browser | None |
+| **LangGraph.js + all npm deps** | Agent + server | Open source | None |
+
+One free sign-up gets you everything that matters.
 
 ## Environment
 
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `GROQ_API_KEY` | **Yes** | Free at https://console.groq.com |
-| `BRAVE_API_KEY` | No | Web search — free at https://api.search.brave.com. Omit for stub. |
-| `TTS_VOICE` | No | Edge TTS voice name (default: `en-US-AriaNeural`) |
+| `BRAVE_API_KEY` | No | Free web search (2k/mo). Omit for stub mode. |
 | `PORT` | No | HTTP port (default: `3000`) |
-
-## Stack
-
-| Layer | Tech |
-|-------|------|
-| LLM | Groq `llama-3.3-70b-versatile` (free tier) |
-| STT | Groq `whisper-large-v3` (free tier) |
-| TTS | Microsoft Edge TTS via `msedge-tts` (free) |
-| Agent | LangGraph.js state graph |
-| Server | Express 4 + `ws` WebSocket |
-| 3D | Three.js + UnrealBloomPass |
 
 ## API
 
@@ -39,22 +38,23 @@ npm start
 |--------|------|------|----------|
 | POST | `/api/chat` | `{ message, history? }` | `{ text, timestamp }` |
 | POST | `/api/transcribe` | `multipart: audio` | `{ text }` |
-| POST | `/api/tts` | `{ text }` | `audio/mpeg` |
 | GET | `/api/health` | — | status JSON |
-| WS | `/ws` | — | real-time events |
+| WS | `/ws` | — | real-time events (reminders, ping/pong) |
 
 ## Agent Tools
 
-- `get_datetime` — current date/time
-- `web_search(query)` — Brave Search (or stub)
-- `remember(key, value)` / `recall(key)` — in-memory store
-- `set_reminder(text, delaySeconds)` — fires toast via WebSocket
+| Tool | What it does |
+|------|-------------|
+| `get_datetime` | Current date/time |
+| `web_search(query)` | Brave Search or stub |
+| `remember(key, value)` / `recall(key)` | In-memory store |
+| `set_reminder(text, delaySeconds)` | Fires toast via WebSocket |
 
 ## Frontend Files
 
 | File | Purpose |
 |------|---------|
-| `public/index.html` | Full app — Three.js orb + glass UI + backend wired |
-| `public/cosmic-scene.html` | Standalone orb demo with amplitude slider |
-| `public/glass-shell.html` | Standalone glass UI demo |
-| `public/mic-bar.html` | Standalone mic button demo |
+| `public/index.html` | Full app — Three.js orb + glass UI + voice wired to backend |
+| `public/cosmic-scene.html` | Standalone orb demo (dev amplitude slider) |
+| `public/glass-shell.html` | Standalone glass UI shell |
+| `public/mic-bar.html` | Standalone mic button with amplitude ring |

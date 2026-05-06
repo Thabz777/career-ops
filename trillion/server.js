@@ -16,29 +16,8 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } });
 
-// ── TTS ────────────────────────────────────────────────────────────────────
-
-async function synthesizeSpeech(text) {
-  try {
-    const { MsEdgeTTS, OUTPUT_FORMAT } = await import('msedge-tts');
-    const tts = new MsEdgeTTS();
-    await tts.setMetadata(
-      process.env.TTS_VOICE ?? 'en-US-AriaNeural',
-      OUTPUT_FORMAT.AUDIO_24KHZ_48KBITRATE_MONO_MP3
-    );
-    const chunks = [];
-    await new Promise((resolve, reject) => {
-      const stream = tts.toStream(text);
-      stream.on('data', chunk => chunks.push(chunk));
-      stream.on('end', resolve);
-      stream.on('error', reject);
-    });
-    return Buffer.concat(chunks);
-  } catch (err) {
-    console.error('[TTS] error:', err.message);
-    return null;
-  }
-}
+// TTS is handled client-side via the Web Speech API (window.speechSynthesis).
+// No server-side TTS dependency needed — 100% free, built into every browser.
 
 // ── Express ────────────────────────────────────────────────────────────────
 
@@ -80,23 +59,13 @@ app.post('/api/transcribe', upload.single('audio'), async (req, res) => {
   }
 });
 
-// POST /api/tts — text → MP3
-app.post('/api/tts', async (req, res) => {
-  const { text } = req.body;
-  if (!text?.trim()) return res.status(400).json({ error: 'text required' });
-  const audio = await synthesizeSpeech(text);
-  if (!audio) return res.status(503).json({ error: 'TTS unavailable' });
-  res.set('Content-Type', 'audio/mpeg');
-  res.send(audio);
-});
-
 // GET /api/health
 app.get('/api/health', (_req, res) => {
   res.json({
     status: 'ok',
     groq: !!process.env.GROQ_API_KEY,
     brave: !!process.env.BRAVE_API_KEY,
-    ttsVoice: process.env.TTS_VOICE ?? 'en-US-AriaNeural',
+    tts: 'client-side Web Speech API (free)',
     uptime: process.uptime(),
   });
 });

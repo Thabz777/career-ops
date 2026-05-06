@@ -537,21 +537,21 @@ async function chat(userText) {
   }
 }
 
-async function playTTS(text) {
-  try {
-    const res = await fetch('/api/tts', {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ text }),
-    });
-    if (!res.ok) return;
-    const buf = await res.arrayBuffer();
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    const decoded = await ctx.decodeAudioData(buf);
-    const src = ctx.createBufferSource();
-    src.buffer = decoded;
-    src.connect(ctx.destination);
-    src.start();
-  } catch { /* TTS optional */ }
+function playTTS(text) {
+  if (!window.speechSynthesis) return;
+  window.speechSynthesis.cancel();
+  const utt = new SpeechSynthesisUtterance(text);
+  utt.rate  = 1.05;
+  utt.pitch = 1.0;
+
+  // Prefer a higher-quality voice if available
+  const voices = window.speechSynthesis.getVoices();
+  const preferred = voices.find(v =>
+    /Google|Zira|Aria|Samantha|Karen|Moira/.test(v.name) && v.lang.startsWith('en')
+  );
+  if (preferred) utt.voice = preferred;
+
+  window.speechSynthesis.speak(utt);
 }
 
 // ── Text input ────────────────────────────────────────────────────────────
